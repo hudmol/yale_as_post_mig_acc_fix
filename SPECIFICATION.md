@@ -16,19 +16,36 @@
 
 ### Beinecke Rare Book Library Repository
 
-The following values from AT should come together to populate the same payments subrecord as part of an accession record
-Values migrated from the AT UserDefinedBoolean1 field in the Accessions module will migrate to user_defined.boolean_1 in ArchivesSpace
-This value of this field should be used to populate the value of in_lot
-Values migrated from the AT UserDefinedReal1 field in the Accessions module will migrate to user_defined.real_1 in ArchivesSpace
-The value of this field should be use to populate total_price
-Values migrated from the AT UserDefinedString3 field in the Accessions module will migrate to user_defined.string_3 in ArchivesSpace
-The value of this field should be used to set the matching enum value in  the currency code field.
-Values migrated from the AT UserDefinedText2 field in the Accessions module will migrate to user_defined.text_2 in ArchivesSpace
-The tokens in user_defined.text_2 will represent fund codes. Multiple fund codes are pipe delimited.
-For each fund code present in user_defined.text_2, create a Payment subrecord.
-Each payment should then have a fund code assigned by matching the token from user_defined.text_2 with a code value in the fund_code enum value list.
-If no match is available, the token from user_defined.text_2 should be copied to the Payment note field.
-After payments subrecords have been created, original values in user defined fields should be set to null or false, as appropriate
+- The following values from AT should come together to populate the same payments subrecord as part of an accession record
+
+  - Values migrated from the AT UserDefinedBoolean1 field in the Accessions module
+    will migrate to user_defined.boolean_1 in ArchivesSpace
+
+    - This value of this field should be used to populate the value of in_lot
+
+  - Values migrated from the AT UserDefinedReal1 field in the Accessions module
+    will migrate to user_defined.real_1 in ArchivesSpace
+
+    - The value of this field should be use to populate total_price
+
+  - Values migrated from the AT UserDefinedString3 field in the Accessions module
+    will migrate to user_defined.string_3 in ArchivesSpace
+
+    - The value of this field should be used to set the matching enum value in  the currency code field.
+
+  - Values migrated from the AT UserDefinedText2 field in the Accessions module
+    will migrate to user_defined.text_2 in ArchivesSpace
+
+    - The tokens in user_defined.text_2 will represent fund codes. Multiple fund codes are pipe delimited.
+      For each fund code present in user_defined.text_2, create a Payment subrecord.
+
+        - Each payment should then have a fund code assigned by matching the token from user_defined.text_2
+          with a code value in the fund_code enum value list.
+
+        - If no match is available, the token from user_defined.text_2 should be copied to the Payment note field.
+
+  - After payments subrecords have been created, original values in user defined fields should be set to null or false, as appropriate
+
 Values migrated from the AT “Agreement Sent” field in the Accessions module will migrate to event records in ArchivesSpace with an enumeration value of “agreement_sent”.
 If an “Agreement Sent” event is associated with an accession record, we want user_defined.boolean_1 to be set to True.
 After user_defined.boolean_1 is set to True, the “Agreement Sent” event should be deleted.
