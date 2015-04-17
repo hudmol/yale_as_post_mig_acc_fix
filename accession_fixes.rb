@@ -39,15 +39,19 @@ class AccessionFixer
 
 
   def fix_brbl(code)
-    log "Running fixes for #{code}"
-    ensure_session
-
-    repo_id = repo_for_code(code)
+    fix(:brbl, code)
   end
 
 
   def fix_mssa(code)
-    log "Running fixes for #{code}"
+    fix(:mssa, code)
+  end
+
+
+  private
+
+  def fix(repo, code)
+    log "Running #{repo} fixes for #{code}"
     ensure_session
 
     repo_uri = repo_for_code(code)
@@ -68,53 +72,26 @@ class AccessionFixer
 
       results['results'].each do |acc|
         log "  Accession #{acc['display_string']}"
-        changed = false
-        if acc.has_key?('user_defined')
-          user_def = acc['user_defined']
-          if user_def['boolean_2']
-            log "    found boolean_2"
-            unless acc['material_types']
-              log "      creating material_types record" 
-              acc['material_types'] = {}
-           end
-            log "      setting 'electronic_documents' to true"
-            acc['material_types']['electronic_documents'] = true
-            log "      setting boolean_2 to false"
-            user_def['boolean_2'] = false
-            changed = true
-          end
 
-          if user_def['real_1']
-            log "    found real_1"
-            log "      adding extent record"
-            extent = {
-              'portion' => 'part',
-              'number' => user_def['real_1'],
-              'extent_type' => 'megabytes'
-            }
-            acc['extents'] << extent
-            log "      removing real_1"
-            user_def.delete('real_1')
-            changed = true
-          end
+        changed = apply_mssa(acc) if repo == :mssa
+        changed = apply_brbl(acc) if repo == :brbl
 
-          # save
-          if changed
-            if @commit
-              log "    saving ..."
-              http = Net::HTTP.new(@backend_url.host, @backend_url.port)
-              request = Net::HTTP::Post.new(acc['uri'])
-              request['X-ArchivesSpace-Session'] = @session
-              request.body = acc.to_json
-              response = http.request(request)
-              raise "Error: #{response.body}" unless response.code == '200'
-              log "           ... success"
-            else
-              log "    skipping save (commit is false)"
-            end
+        # save
+        if changed
+          if @commit
+            log "    saving ..."
+            http = Net::HTTP.new(@backend_url.host, @backend_url.port)
+            request = Net::HTTP::Post.new(acc['uri'])
+            request['X-ArchivesSpace-Session'] = @session
+            request.body = acc.to_json
+            response = http.request(request)
+            raise "Error: #{response.body}" unless response.code == '200'
+            log "           ... success"
+          else
+            log "    skipping save (commit is false)"
           end
-
         end
+
       end
 
       if results['this_page'] < results['last_page']
@@ -127,7 +104,50 @@ class AccessionFixer
   end
 
 
-  private
+  def apply_mssa(acc)
+    changed = false
+
+    if acc.has_key?('user_defined')
+
+      user_def = acc['user_defined']
+      if user_def['boolean_2']
+        log "    found boolean_2"
+        unless acc['material_types']
+          log "      creating material_types record" 
+          acc['material_types'] = {}
+        end
+        log "      setting 'electronic_documents' to true"
+        acc['material_types']['electronic_documents'] = true
+        log "      setting boolean_2 to false"
+        user_def['boolean_2'] = false
+        changed = true
+      end
+
+      if user_def['real_1']
+        log "    found real_1"
+        log "      adding extent record"
+        extent = {
+          'portion' => 'part',
+          'number' => user_def['real_1'],
+          'extent_type' => 'megabytes'
+        }
+        acc['extents'] << extent
+        log "      removing real_1"
+        user_def.delete('real_1')
+        changed = true
+      end
+    end
+
+    changed
+  end
+
+
+  def apply_mssa(acc)
+    changed = false
+
+    changed
+  end
+
 
   def log(msg = "")
     puts msg
