@@ -87,11 +87,15 @@
   - Once a new extent has been created, user_defined.integer_1 should be set to null.
 
 
-Values migrated from the AT UserDefinedInteger2 field in the Accessions module will migrate to user_defined.integer_2 in ArchivesSpace
-The value of this field should be used to create a new extent subrecord.
-The portion of this event subrecord should be set to “part”.
-The extent type should be set to “Non-book format items”.
-Once a new extent has been created, user_defined.integer_2 should be set to null.
+- Values migrated from the AT UserDefinedInteger2 field in the Accessions module
+  will migrate to user_defined.integer_2 in ArchivesSpace
+
+  - The value of this field should be used to create a new extent subrecord.
+    - The portion of this event subrecord should be set to “part”.
+    - The extent type should be set to “Non-book format items”.
+
+  - Once a new extent has been created, user_defined.integer_2 should be set to null.
+
 Values migrated from the AT UserDefinedString2 field in the Accessions module will migrate to user_defined.string_2 in ArchivesSpace
 The value of this field should be moved to user_defined.text_1
 Once the value has been moved, user_defined.string_2 should be set to blank.

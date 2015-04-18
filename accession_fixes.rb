@@ -235,6 +235,25 @@ class AccessionFixer
       end
     end
 
+
+    # integer_2 > extent
+    if acc.has_key?('user_defined')
+      user_def = acc['user_defined']
+      if user_def['integer_2']
+        log "    found integer_2"
+        log "      adding extent record"
+        extent = {
+          'portion' => 'part',
+          'number' => user_def['integer_2'],
+          'extent_type' => 'non_book_format_items'
+        }
+        acc['extents'] << extent
+        log "      removing integer_2"
+        user_def.delete('integer_2')
+        changed = true
+      end
+    end
+
     [changed, deletes]
   end
 
