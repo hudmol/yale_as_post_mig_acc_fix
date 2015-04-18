@@ -59,8 +59,8 @@ class AccessionFixer
       results['results'].each do |acc|
         log "  Accession #{acc['display_string']}"
 
-        (changed, deletes) = apply_mssa(acc) if repo == :mssa
-        (changed, deletes) = apply_brbl(acc) if repo == :brbl
+        changed, deletes = apply_mssa(acc) if repo == :mssa
+        changed, deletes = apply_brbl(acc) if repo == :brbl
 
         # save
         if changed
@@ -149,8 +149,8 @@ class AccessionFixer
     changed = false
     deletes = []
 
+    # payments
     if acc.has_key?('user_defined')
-      # payments
       user_def = acc['user_defined']
       if user_def.has_key?('real_1')
         payment_summary = {
@@ -176,6 +176,8 @@ class AccessionFixer
       end
     end
 
+
+    # agreement_sent
     acc['linked_events'].each do |event|
       response = get_request(event['ref'])
       results = JSON.parse(response.body)
@@ -186,6 +188,19 @@ class AccessionFixer
         deletes << event['ref']
       end
     end
+
+
+    # condition_description
+    if acc.has_key?('condition_description')
+      if acc.has_key?('content_description')
+        acc['content_description'] += " \n" + acc['condition_description']
+      else
+        acc['content_description'] = acc['condition_description']
+      end
+      acc.delete('condition_description')
+      changed = true
+    end
+    pp acc
 
     [changed, deletes]
   end

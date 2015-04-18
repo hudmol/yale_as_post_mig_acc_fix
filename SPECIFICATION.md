@@ -44,20 +44,31 @@
 
         - If no match is available, the token from user_defined.text_2 should be copied to the Payment note field.
 
-  - After payments subrecords have been created, original values in user defined fields should be set to null or false, as appropriate
+  - After payments subrecords have been created,
+    original values in user defined fields should be set to null or false, as appropriate
 
 
 - Values migrated from the AT “Agreement Sent” field in the Accessions module
   will migrate to event records in ArchivesSpace with an enumeration value of “agreement_sent”.
 
-  - If an “Agreement Sent” event is associated with an accession record, we want user_defined.boolean_1 to be set to True.
+  - If an “Agreement Sent” event is associated with an accession record,
+    we want user_defined.boolean_1 to be set to True.
 
   - After user_defined.boolean_1 is set to True, the “Agreement Sent” event should be deleted.
 
-Values migrated from the AT ConditionNote field in the Accessions module will migrate to the ArchivesSpace condition_description field.
-These values should be moved to the content_description field.
-If there is already content in the content_description field, concatenate the value of content_description and what had been in AT as ConditionNote (in that order), separated by a space and a line break.
-After these values are moved, condition_description should be set to null.
+
+- Values migrated from the AT ConditionNote field in the Accessions module
+  will migrate to the ArchivesSpace condition_description field.
+
+  - These values should be moved to the content_description field.
+
+  - If there is already content in the content_description field,
+    concatenate the value of content_description and what had been in AT as ConditionNote (in that order),
+    separated by a space and a line break.
+
+  - After these values are moved, condition_description should be set to null.
+
+
 Values migrated from the AT RightsTransferred field in the Accessions module will migrate to event records in ArchivesSpace with an enumeration value of “rights_transferred.”
 If a “Rights Transferred” event is associated with an accession record, we want user_defined.boolean_2 to be set to True.
 After user_defined.boolean_2 is set to True, the “Rights Transferred” event should be deleted.
