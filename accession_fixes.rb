@@ -59,8 +59,8 @@ class AccessionFixer
       results['results'].each do |acc|
         log "  Accession #{acc['display_string']}"
 
-        changed = apply_mssa(acc) if repo == :mssa
-        changed = apply_brbl(acc) if repo == :brbl
+        (changed, deletes) = apply_mssa(acc) if repo == :mssa
+        (changed, deletes) = apply_brbl(acc) if repo == :brbl
 
         # save
         if changed
@@ -78,6 +78,21 @@ class AccessionFixer
           end
         end
 
+        unless deletes.empty?
+          if @commit
+            deletes.each do |ref|
+              log "    deleting #{ref}"
+              response = delete_request(ref)
+              if response.code == '200'
+                log "      ... success"
+              else
+                log "ERROR: Failed to delete #{ref} - #{response.body}"
+              end
+            end
+          else
+            log "    skipping deletes (commit is false)"
+          end
+        end
       end
 
       if results['this_page'] < results['last_page']
@@ -126,40 +141,53 @@ class AccessionFixer
       end
     end
 
-    changed
+    [changed, []]
   end
 
 
   def apply_brbl(acc)
     changed = false
+    deletes = []
 
     if acc.has_key?('user_defined')
-
       # payments
       user_def = acc['user_defined']
-      payment_summary = {
-        'in_lot' => user_def['boolean_1'],
-        'total_price' => user_def['real_1'],
-        'currency' => user_def['string_3'],
-        'payments' => []
-      }
-      user_def['text_2'].split('|').each do |fund_code|
-        fund_code.strip!
-        if @fund_codes.include?(fund_code)
-          payment_summary['payments'] << {'fund_code' => fund_code}
-        else
-          payment_summary['payments'] << {'note' => fund_code}
+      if user_def.has_key?('real_1')
+        payment_summary = {
+          'in_lot' => user_def['boolean_1'],
+          'total_price' => user_def['real_1'],
+          'currency' => user_def['string_3'],
+          'payments' => []
+        }
+        user_def['text_2'].split('|').each do |fund_code|
+          fund_code.strip!
+          if @fund_codes.include?(fund_code)
+            payment_summary['payments'] << {'fund_code' => fund_code}
+          else
+            payment_summary['payments'] << {'note' => fund_code}
+          end
         end
+        acc['payment_summary'] = payment_summary
+        user_def['boolean_1'] = false
+        user_def.delete('real_1')
+        user_def.delete('string_3')
+        user_def.delete('text_2')
+        changed = true
       end
-      acc['payment_summary'] = payment_summary
-      user_def['boolean_1'] = false
-      user_def.delete('real_1')
-      user_def.delete('string_3')
-      user_def.delete('text_2')
-      changed = true
     end
 
-    changed
+    acc['linked_events'].each do |event|
+      response = get_request(event['ref'])
+      results = JSON.parse(response.body)
+      if results['event_type'] == 'agreement_sent'
+        acc['user_defined'] ||= {}
+        acc['user_defined']['boolean_1'] = true
+        changed = true
+        deletes << event['ref']
+      end
+    end
+
+    [changed, deletes]
   end
 
 
@@ -202,6 +230,14 @@ class AccessionFixer
     request = Net::HTTP::Get.new(uri)
     request['X-ArchivesSpace-Session'] = @session
     request.set_form_data(data) if data
+    http.request(request)
+  end
+
+
+  def delete_request(uri)
+    http = Net::HTTP.new(@backend_url.host, @backend_url.port)
+    request = Net::HTTP::Delete.new(uri)
+    request['X-ArchivesSpace-Session'] = @session
     http.request(request)
   end
 
