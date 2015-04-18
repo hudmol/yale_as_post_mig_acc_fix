@@ -254,6 +254,20 @@ class AccessionFixer
       end
     end
 
+
+    # string_2 > text_1
+    if acc.has_key?('user_defined')
+      user_def = acc['user_defined']
+      if user_def['string_2']
+        log "    found string_2"
+        log "      copying to text_1"
+        user_def['text_1'] = user_def['string_2']
+        log "      removing string_2"
+        user_def.delete('string_2')
+        changed = true
+      end
+    end
+
     [changed, deletes]
   end
 

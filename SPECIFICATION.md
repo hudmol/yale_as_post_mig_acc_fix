@@ -96,9 +96,15 @@
 
   - Once a new extent has been created, user_defined.integer_2 should be set to null.
 
-Values migrated from the AT UserDefinedString2 field in the Accessions module will migrate to user_defined.string_2 in ArchivesSpace
-The value of this field should be moved to user_defined.text_1
-Once the value has been moved, user_defined.string_2 should be set to blank.
+
+- Values migrated from the AT UserDefinedString2 field in the Accessions module
+  will migrate to user_defined.string_2 in ArchivesSpace
+
+  - The value of this field should be moved to user_defined.text_1
+
+  - Once the value has been moved, user_defined.string_2 should be set to blank.
+
+
 Geographic subjects associated with accession records in Archivists’ Toolkit will migrate to geographic subjects in ArchivesSpace
 We want for the string value of geographic subjects associated with accession records to be moved to user_defined.string_3.
 We want for this subject to be disassociated with the accession record.
