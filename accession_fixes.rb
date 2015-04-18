@@ -24,21 +24,10 @@ class AccessionFixer
   end
 
 
-  def repo_for_code(repo_code)
-    log "  finding repository for #{repo_code}"
-    http = Net::HTTP.new(@backend_url.host, @backend_url.port)
-    request = Net::HTTP::Get.new("/search/repositories")
-    request['X-ArchivesSpace-Session'] = @session
-    request.set_form_data('page' => 1,'q' => "title='#{repo_code}'")
-    response = http.request(request)
-    raise "Error: #{response.body}" unless response.code == '200'
-    results = JSON.parse(response.body)
-    log "    ... got #{results['results'].first['id']}"
-    results['results'].first['id']
-  end
-
-
   def fix_brbl(code)
+    @fund_codes = get_enumeration('payment_fund_code')
+    log "Found fund codes: #{@fund_codes.inspect}"
+
     fix(:brbl, code)
   end
 
@@ -60,11 +49,8 @@ class AccessionFixer
 
     while true
       log "page #{page}"
-      http = Net::HTTP.new(@backend_url.host, @backend_url.port)
-      request = Net::HTTP::Get.new("#{repo_uri}/accessions")
-      request['X-ArchivesSpace-Session'] = @session
-      request.set_form_data('page' => page)
-      response = http.request(request)
+
+      response = get_request("#{repo_uri}/accessions", {'page' => page})
 
       raise "Error: #{response.body}" unless response.code == '200'
 
@@ -109,6 +95,7 @@ class AccessionFixer
 
     if acc.has_key?('user_defined')
 
+      # electronic documents
       user_def = acc['user_defined']
       if user_def['boolean_2']
         log "    found boolean_2"
@@ -123,6 +110,7 @@ class AccessionFixer
         changed = true
       end
 
+      # extent
       if user_def['real_1']
         log "    found real_1"
         log "      adding extent record"
@@ -142,8 +130,34 @@ class AccessionFixer
   end
 
 
-  def apply_mssa(acc)
+  def apply_brbl(acc)
     changed = false
+
+    if acc.has_key?('user_defined')
+
+      # payments
+      user_def = acc['user_defined']
+      payment_summary = {
+        'in_lot' => user_def['boolean_1'],
+        'total_price' => user_def['real_1'],
+        'currency' => user_def['string_3'],
+        'payments' => []
+      }
+      user_def['text_2'].split('|').each do |fund_code|
+        fund_code.strip!
+        if @fund_codes.include?(fund_code)
+          payment_summary['payments'] << {'fund_code' => fund_code}
+        else
+          payment_summary['payments'] << {'note' => fund_code}
+        end
+      end
+      acc['payment_summary'] = payment_summary
+      user_def['boolean_1'] = false
+      user_def.delete('real_1')
+      user_def.delete('string_3')
+      user_def.delete('text_2')
+      changed = true
+    end
 
     changed
   end
@@ -163,6 +177,32 @@ class AccessionFixer
     raise "Login failed" unless response.code == '200'
 
     @session = JSON.parse(response.body)['session']
+  end
+
+
+  def repo_for_code(repo_code)
+    log "  finding repository for #{repo_code}"
+    response = get_request("/search/repositories", {'page' => 1,'q' => "title='#{repo_code}'"})
+    raise "Error: #{response.body}" unless response.code == '200'
+    results = JSON.parse(response.body)
+    log "    ... got #{results['results'].first['id']}"
+    results['results'].first['id']
+  end
+
+
+  def get_enumeration(name)
+    response = get_request('/config/enumerations')
+    results = JSON.parse(response.body)
+    results.select {|a| a['name'] == name }.first['values']
+  end
+
+
+  def get_request(uri, data = nil)
+    http = Net::HTTP.new(@backend_url.host, @backend_url.port)
+    request = Net::HTTP::Get.new(uri)
+    request['X-ArchivesSpace-Session'] = @session
+    request.set_form_data(data) if data
+    http.request(request)
   end
 
 end
