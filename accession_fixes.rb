@@ -109,9 +109,9 @@ class AccessionFixer
     changed = false
 
     if acc.has_key?('user_defined')
-
-      # electronic documents
       user_def = acc['user_defined']
+
+      # boolean_2 > electronic_documents
       if user_def['boolean_2']
         log "    found boolean_2"
         unless acc['material_types']
@@ -125,7 +125,7 @@ class AccessionFixer
         changed = true
       end
 
-      # extent
+      # real_1 > extent
       if user_def['real_1']
         log "    found real_1"
         log "      adding extent record"
@@ -216,6 +216,24 @@ class AccessionFixer
       end
     end
 
+
+    # integer_1 > extent
+    if acc.has_key?('user_defined')
+      user_def = acc['user_defined']
+      if user_def['integer_1']
+        log "    found integer_1"
+        log "      adding extent record"
+        extent = {
+          'portion' => 'part',
+          'number' => user_def['integer_1'],
+          'extent_type' => 'manuscript_items'
+        }
+        acc['extents'] << extent
+        log "      removing integer_1"
+        user_def.delete('integer_1')
+        changed = true
+      end
+    end
 
     [changed, deletes]
   end

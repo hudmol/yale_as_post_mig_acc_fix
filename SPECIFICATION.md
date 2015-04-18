@@ -77,11 +77,16 @@
   - After user_defined.boolean_2 is set to True, the “Rights Transferred” event should be deleted.
 
 
-Values migrated from the AT UserDefinedInteger1 field in the Accessions module will migrate to user_defined.integer_1 in ArchivesSpace
-The value of this field should be used to create a new extent subrecord.
-The portion of this event subrecord should be set to “part”.
-The extent type should be set to “Manuscript items”.
-Once a new extent has been created, user_defined.integer_1 should be set to null.
+- Values migrated from the AT UserDefinedInteger1 field in the Accessions module
+  will migrate to user_defined.integer_1 in ArchivesSpace
+
+  - The value of this field should be used to create a new extent subrecord.
+    - The portion of this event subrecord should be set to “part”.
+    - The extent type should be set to “Manuscript items”.
+
+  - Once a new extent has been created, user_defined.integer_1 should be set to null.
+
+
 Values migrated from the AT UserDefinedInteger2 field in the Accessions module will migrate to user_defined.integer_2 in ArchivesSpace
 The value of this field should be used to create a new extent subrecord.
 The portion of this event subrecord should be set to “part”.
