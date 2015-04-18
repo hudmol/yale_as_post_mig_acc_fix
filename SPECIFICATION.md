@@ -69,9 +69,14 @@
   - After these values are moved, condition_description should be set to null.
 
 
-Values migrated from the AT RightsTransferred field in the Accessions module will migrate to event records in ArchivesSpace with an enumeration value of “rights_transferred.”
-If a “Rights Transferred” event is associated with an accession record, we want user_defined.boolean_2 to be set to True.
-After user_defined.boolean_2 is set to True, the “Rights Transferred” event should be deleted.
+- Values migrated from the AT RightsTransferred field in the Accessions module
+  will migrate to event records in ArchivesSpace with an enumeration value of “rights_transferred.”
+
+  - If a “Rights Transferred” event is associated with an accession record, we want user_defined.boolean_2 to be set to True.
+
+  - After user_defined.boolean_2 is set to True, the “Rights Transferred” event should be deleted.
+
+
 Values migrated from the AT UserDefinedInteger1 field in the Accessions module will migrate to user_defined.integer_1 in ArchivesSpace
 The value of this field should be used to create a new extent subrecord.
 The portion of this event subrecord should be set to “part”.

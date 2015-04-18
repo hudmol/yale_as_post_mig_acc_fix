@@ -186,6 +186,7 @@ class AccessionFixer
         acc['user_defined']['boolean_1'] = true
         changed = true
         deletes << event['ref']
+        break
       end
     end
 
@@ -200,7 +201,21 @@ class AccessionFixer
       acc.delete('condition_description')
       changed = true
     end
-    pp acc
+
+
+    # rights_transferred
+    acc['linked_events'].each do |event|
+      response = get_request(event['ref'])
+      results = JSON.parse(response.body)
+      if results['event_type'] == 'rights_transferred'
+        acc['user_defined'] ||= {}
+        acc['user_defined']['boolean_2'] = true
+        changed = true
+        deletes << event['ref']
+        break
+      end
+    end
+
 
     [changed, deletes]
   end
