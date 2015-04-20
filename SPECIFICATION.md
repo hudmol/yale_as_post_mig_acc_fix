@@ -115,5 +115,6 @@
   - We want for any unlinked subject records to be deleted.
 
 
-The user_defined.enum_2 field in ArchivesSpace will have two possible values: pa | mssu
-We want each accession record migrated from the Archivists’ Toolkit to be given the value “mssu” in user_defined.enum_2.
+- The user_defined.enum_2 field in ArchivesSpace will have two possible values: pa | mssu
+
+  - We want each accession record migrated from the Archivists’ Toolkit to be given the value “mssu” in user_defined.enum_2.

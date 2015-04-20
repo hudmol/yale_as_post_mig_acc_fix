@@ -314,6 +314,13 @@ class AccessionFixer
     end
 
 
+    @log.debug "enum_2 > mssu"
+    acc['user_defined'] ||= {}
+    acc['user_defined']['enum_2'] = 'mssu'
+    @log.debug "record changed"
+    changed = true
+    
+
     [changed, deletes]
   end
 
