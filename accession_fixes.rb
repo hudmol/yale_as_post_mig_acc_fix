@@ -14,8 +14,8 @@ class AccessionFixer
     @password = opts[:password]
     @commit = opts[:commit] || false
     @session = nil
-    @log = log
 
+    @log = log
     @log.info "Initialized AccessionFixer with options:"
     @log.info "  backend_url: #{@backend_url}"
     @log.info "  username:    #{@username}"
@@ -48,7 +48,7 @@ class AccessionFixer
     page = 1
 
     while true
-      @log.info "page #{page}"
+      @log.debug "page #{page}"
 
       response = get_request("#{repo_uri}/accessions", {'page' => page})
 
@@ -57,7 +57,7 @@ class AccessionFixer
       results = JSON.parse(response.body)
 
       results['results'].each do |acc|
-        @log.info "  Accession #{acc['display_string']}"
+        @log.info "Accession #{acc['display_string']}"
 
         changed, deletes = apply_mssa(acc) if repo == :mssa
         changed, deletes = apply_brbl(acc) if repo == :brbl
@@ -65,34 +65,36 @@ class AccessionFixer
         # save
         if changed
           if @commit
-            @log.info "    saving ..."
+            @log.debug "saving ..."
             http = Net::HTTP.new(@backend_url.host, @backend_url.port)
             request = Net::HTTP::Post.new(acc['uri'])
             request['X-ArchivesSpace-Session'] = @session
             request.body = acc.to_json
             response = http.request(request)
-            raise "Error: #{response.body}" unless response.code == '200'
-            @log.info "           ... success"
+            if response.code == '200'
+              @log.info { "Saved #{acc['uri']}" }
+
+              # only do deletes if we successfully saved - don't want to lose data
+              unless deletes.empty?
+                deletes.each do |ref|
+                  @log.debug "deleting #{ref}"
+                  response = delete_request(ref)
+                  if response.code == '200'
+                    @log.info { "Deleted #{ref}" }
+                  else
+                    @log.error { "Failed to delete #{ref} for #{acc['uri']}: #{response.body}" }
+                  end
+                end
+              end
+
+            else
+              @log.error { "Couldn't save #{acc['uri']}: #{response.body}" }
+            end
           else
-            @log.info "    skipping save (commit is false)"
+            @log.debug "skipping save (commit is false)"
           end
         end
 
-        unless deletes.empty?
-          if @commit
-            deletes.each do |ref|
-              @log.info "    deleting #{ref}"
-              response = delete_request(ref)
-              if response.code == '200'
-                @log.info "      ... success"
-              else
-                @log.error "ERROR: Failed to delete #{ref} - #{response.body}"
-              end
-            end
-          else
-            @log.info "    skipping deletes (commit is false)"
-          end
-        end
       end
 
       if results['this_page'] < results['last_page']
@@ -108,35 +110,32 @@ class AccessionFixer
   def apply_mssa(acc)
     changed = false
 
+    @log.debug "applying rule: boolean_2 > electronic_documents"
     if acc.has_key?('user_defined')
       user_def = acc['user_defined']
-
-      # boolean_2 > electronic_documents
       if user_def['boolean_2']
-        @log.info "    found boolean_2"
         unless acc['material_types']
-          @log.info "      creating material_types record" 
           acc['material_types'] = {}
         end
-        @log.info "      setting 'electronic_documents' to true"
         acc['material_types']['electronic_documents'] = true
-        @log.info "      setting boolean_2 to false"
         user_def['boolean_2'] = false
+        @log.debug "record changed"
         changed = true
       end
+    end
 
-      # real_1 > extent
+    @log.debug "applying rule: real_1 > extent"
+    if acc.has_key?('user_defined')
+      user_def = acc['user_defined']
       if user_def['real_1']
-        @log.info "    found real_1"
-        @log.info "      adding extent record"
         extent = {
           'portion' => 'part',
           'number' => user_def['real_1'],
           'extent_type' => 'megabytes'
         }
         acc['extents'] << extent
-        @log.info "      removing real_1"
         user_def.delete('real_1')
+        @log.debug "record changed"
         changed = true
       end
     end
@@ -149,7 +148,7 @@ class AccessionFixer
     changed = false
     deletes = []
 
-    # payments
+    @log.debug "applying rule: real_1 > payment"
     if acc.has_key?('user_defined')
       user_def = acc['user_defined']
       if user_def.has_key?('real_1')
@@ -172,26 +171,29 @@ class AccessionFixer
         user_def.delete('real_1')
         user_def.delete('string_3')
         user_def.delete('text_2')
+        @log.debug "record changed"
         changed = true
       end
     end
 
 
-    # agreement_sent
+    @log.debug "applying rule: agreement_sent > boolean_1"
     acc['linked_events'].each do |event|
       response = get_request(event['ref'])
       results = JSON.parse(response.body)
       if results['event_type'] == 'agreement_sent'
         acc['user_defined'] ||= {}
         acc['user_defined']['boolean_1'] = true
+        @log.debug "record changed"
         changed = true
+        @log.debug { "record #{event['ref']} marked for delete" }
         deletes << event['ref']
         break
       end
     end
 
 
-    # condition_description
+    @log.debug "applying rule: condition_description > content_description"
     if acc.has_key?('condition_description')
       if acc.has_key?('content_description')
         acc['content_description'] += " \n" + acc['condition_description']
@@ -199,71 +201,68 @@ class AccessionFixer
         acc['content_description'] = acc['condition_description']
       end
       acc.delete('condition_description')
+      @log.debug "record changed"
       changed = true
     end
 
 
-    # rights_transferred
+    @log.debug "applying rule: rights_transferred > boolean_2"
     acc['linked_events'].each do |event|
       response = get_request(event['ref'])
       results = JSON.parse(response.body)
       if results['event_type'] == 'rights_transferred'
         acc['user_defined'] ||= {}
         acc['user_defined']['boolean_2'] = true
+        @log.debug "record changed"
         changed = true
+        @log.debug { "record #{event['ref']} marked for delete" }
         deletes << event['ref']
         break
       end
     end
 
 
-    # integer_1 > extent
+    @log.debug "applying rule: integer_1 > extent"
     if acc.has_key?('user_defined')
       user_def = acc['user_defined']
       if user_def['integer_1']
-        @log.info "    found integer_1"
-        @log.info "      adding extent record"
         extent = {
           'portion' => 'part',
           'number' => user_def['integer_1'],
           'extent_type' => 'manuscript_items'
         }
         acc['extents'] << extent
-        @log.info "      removing integer_1"
         user_def.delete('integer_1')
+        @log.debug "record changed"
         changed = true
       end
     end
 
 
-    # integer_2 > extent
+    @log.debug "applying rule: integer_2 > extent"
     if acc.has_key?('user_defined')
       user_def = acc['user_defined']
       if user_def['integer_2']
-        @log.info "    found integer_2"
-        @log.info "      adding extent record"
         extent = {
           'portion' => 'part',
           'number' => user_def['integer_2'],
           'extent_type' => 'non_book_format_items'
         }
         acc['extents'] << extent
-        @log.info "      removing integer_2"
         user_def.delete('integer_2')
+        @log.debug "record changed"
         changed = true
       end
     end
 
 
-    # string_2 > text_1
+    @log.debug "applying rule: string_2 > text_1"
     if acc.has_key?('user_defined')
       user_def = acc['user_defined']
       if user_def['string_2']
-        @log.info "    found string_2"
-        @log.info "      copying to text_1"
         user_def['text_1'] = user_def['string_2']
-        @log.info "      removing string_2"
         user_def.delete('string_2')
+        @log.debug "record changed"
         changed = true
       end
     end
@@ -342,6 +341,7 @@ OptionParser.new do |opts|
   opts.on('-c', '--commit', 'Commit changes to the database') { |v| options[:commit] = v }
 
   opts.on('-q', '--quiet', 'Only log warnings and errors') { log.level = Logger::WARN  }
+  opts.on('-d', '--debug', 'Log debugging output') { log.level = Logger::DEBUG  }
 
   opts.on("-h", "--help", "Prints this help") { puts opts; exit }
 end.parse!
