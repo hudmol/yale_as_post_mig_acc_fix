@@ -16,19 +16,44 @@ class AccessionFixer
     @session = nil
 
     @log = log
-    @log.info "Initialized AccessionFixer with options:"
-    @log.info "  backend_url: #{@backend_url}"
-    @log.info "  username:    #{@username}"
-    @log.info "  password:    ---"
-    @log.info "  commit:      #{@commit}"
+    @log.info { "Initialized AccessionFixer with options:" }
+    @log.info { "  backend_url: #{@backend_url}" }
+    @log.info { "  username:    #{@username}" }
+    @log.info { "  password:    ---" }
+    @log.info { "  commit:      #{@commit}" }
   end
 
 
   def fix_brbl(code)
     @fund_codes = get_enumeration('payment_fund_code')
-    @log.debug "found fund codes: #{@fund_codes.inspect}"
+    @log.debug { "found fund codes: #{@fund_codes.inspect}" }
+
+    @delete_if_unlinked = {}
 
     fix(:brbl, code)
+
+    # this is flawed because we can't count on the indexer to have caught up
+    @log.debug "checking for unlinked subjects to delete"
+    @delete_if_unlinked.each_pair do |ref, title|
+      @log.debug { "checking #{ref} #{title}" }
+      response = get_request("#{@repo_uri}/search", { 'page' => 1, 'filter_term[]' => { "subjects" => title }.to_json })
+      if response.code == '200'
+        results = JSON.parse(response.body)
+        if results['total_hits'] == 0
+          @log.debug "subject is no longer linked to any records, so deleting"
+          del_resp = delete_request(ref)
+          if del_resp.code == '200'
+            @log.info { "Deleted #{ref}" }
+          else
+            @log.error { "Failed to delete subject #{ref}: #{del_resp.code} #{del_resp.body}" }
+          end
+        else
+          @log.debug { "subject still has #{results['total_hits']} records linking to it, so not deleting" }
+        end
+      else
+        @log.error { "Subject search failed: #{response.body}" }
+      end
+    end
   end
 
 
@@ -43,14 +68,14 @@ class AccessionFixer
     @log.info "Running #{repo} fixes for #{code}"
     ensure_session
 
-    repo_uri = repo_for_code(code)
+    @repo_uri = repo_for_code(code)
 
     page = 1
 
     while true
       @log.debug "page #{page}"
 
-      response = get_request("#{repo_uri}/accessions", {'page' => page})
+      response = get_request("#{@repo_uri}/accessions", {'page' => page})
 
       raise "Error: #{response.body}" unless response.code == '200'
 
@@ -65,7 +90,7 @@ class AccessionFixer
         # save
         if changed
           if @commit
-            @log.debug "saving ..."
+            @log.debug "saving #{acc.inspect}"
             http = Net::HTTP.new(@backend_url.host, @backend_url.port)
             request = Net::HTTP::Post.new(acc['uri'])
             request['X-ArchivesSpace-Session'] = @session
@@ -266,6 +291,29 @@ class AccessionFixer
       end
     end
 
+
+    @log.debug "applying rule: geographic > string_3"
+    removed_subjects = {}
+    acc['subjects'].each do |subject|
+      response = get_request(subject['ref'])
+      subj = JSON.parse(response.body)
+      if subj['source'] == 'tgn'
+        acc['user_defined'] ||= {}
+        acc['user_defined']['string_3'] = subj['title']
+        @log.debug "record changed"
+        changed = true
+        removed_subjects[subject['ref']] = subj['title']
+        break
+      end
+    end
+    removed_subjects.each_pair do |ref, title|
+      @log.debug { "unlinking #{ref}" }
+      acc['subjects'].reject!{ |subj| subj['ref'] == ref }
+      @log.debug { "subject #{ref} marked for delete if unlinked" }
+      @delete_if_unlinked[ref] = title
+    end
+
+
     [changed, deletes]
   end
 
@@ -284,7 +332,7 @@ class AccessionFixer
 
   def repo_for_code(repo_code)
     @log.info "  finding repository for #{repo_code}"
-    response = get_request("/search/repositories", {'page' => 1,'q' => "title='#{repo_code}'"})
+    response = get_request("/search/repositories", { 'page' => 1, 'q' => "title='#{repo_code}'" })
     raise "Error: #{response.body}" unless response.code == '200'
     results = JSON.parse(response.body)
     @log.info "    ... got #{results['results'].first['id']}"

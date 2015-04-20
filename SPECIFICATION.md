@@ -105,9 +105,15 @@
   - Once the value has been moved, user_defined.string_2 should be set to blank.
 
 
-Geographic subjects associated with accession records in Archivists’ Toolkit will migrate to geographic subjects in ArchivesSpace
-We want for the string value of geographic subjects associated with accession records to be moved to user_defined.string_3.
-We want for this subject to be disassociated with the accession record.
-We want for any unlinked subject records to be deleted.
+- Geographic subjects associated with accession records in Archivists’ Toolkit
+  will migrate to geographic subjects in ArchivesSpace
+
+  - We want for the string value of geographic subjects associated with accession records to be moved to user_defined.string_3.
+
+  - We want for this subject to be disassociated with the accession record.
+
+  - We want for any unlinked subject records to be deleted.
+
+
 The user_defined.enum_2 field in ArchivesSpace will have two possible values: pa | mssu
 We want each accession record migrated from the Archivists’ Toolkit to be given the value “mssu” in user_defined.enum_2.
