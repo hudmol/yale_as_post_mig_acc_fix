@@ -34,26 +34,31 @@ class AccessionFixer
 
     # this is flawed because we can't count on the indexer to have caught up
     @log.debug "checking for unlinked subjects to delete"
-    @delete_if_unlinked.each_pair do |ref, title|
-      @log.debug { "checking #{ref} #{title}" }
-      response = get_request("#{@repo_uri}/search", { 'page' => 1, 'filter_term[]' => { "subjects" => title }.to_json })
-      if response.code == '200'
-        results = JSON.parse(response.body)
-        if results['total_hits'] == 0
-          @log.debug "subject is no longer linked to any records, so deleting"
-          del_resp = delete_request(ref)
-          if del_resp.code == '200'
-            @log.info { "Deleted #{ref}" }
+    if @commit
+      @delete_if_unlinked.each_pair do |ref, title|
+        @log.debug { "checking #{ref} #{title}" }
+        response = get_request("#{@repo_uri}/search", { 'page' => 1, 'filter_term[]' => { "subjects" => title }.to_json })
+        if response.code == '200'
+          results = JSON.parse(response.body)
+          if results['total_hits'] == 0
+            @log.debug "subject is no longer linked to any records, so deleting"
+            del_resp = delete_request(ref)
+            if del_resp.code == '200'
+              @log.info { "Deleted #{ref}" }
+            else
+              @log.error { "Failed to delete subject #{ref}: #{del_resp.code} #{del_resp.body}" }
+            end
           else
-            @log.error { "Failed to delete subject #{ref}: #{del_resp.code} #{del_resp.body}" }
+            @log.debug { "subject still has #{results['total_hits']} records linking to it, so not deleting" }
           end
         else
-          @log.debug { "subject still has #{results['total_hits']} records linking to it, so not deleting" }
+          @log.error { "Subject search failed: #{response.body}" }
         end
-      else
-        @log.error { "Subject search failed: #{response.body}" }
       end
+    else
+      @log.debug "skipping subject delete (commit is false)"
     end
+
   end
 
 
@@ -89,6 +94,7 @@ class AccessionFixer
 
         # save
         if changed
+          @log.debug { "record has changed: #{acc}" }
           if @commit
             @log.debug "saving #{acc.inspect}"
             http = Net::HTTP.new(@backend_url.host, @backend_url.port)
@@ -292,25 +298,21 @@ class AccessionFixer
     end
 
 
-    @log.debug "applying rule: geographic > string_3"
-    removed_subjects = {}
+    @log.debug "applying rule: subject > string_3"
+    subjects = []
     acc['subjects'].each do |subject|
       response = get_request(subject['ref'])
       subj = JSON.parse(response.body)
-      if subj['source'] == 'tgn'
-        acc['user_defined'] ||= {}
-        acc['user_defined']['string_3'] = subj['title']
-        @log.debug "record changed"
-        changed = true
-        removed_subjects[subject['ref']] = subj['title']
-        break
-      end
+      subjects << subj['title']
+      @delete_if_unlinked[subject['ref']] = subj['title']
     end
-    removed_subjects.each_pair do |ref, title|
-      @log.debug { "unlinking #{ref}" }
-      acc['subjects'].reject!{ |subj| subj['ref'] == ref }
-      @log.debug { "subject #{ref} marked for delete if unlinked" }
-      @delete_if_unlinked[ref] = title
+    unless subjects.empty?
+      acc['user_defined'] ||= {}
+      acc['user_defined']['string_3'] = subjects.join('; ')
+      @log.debug "record changed"
+      changed = true
+      @log.debug "unlinking subjects"
+      acc['subjects'] = []
     end
 
 
