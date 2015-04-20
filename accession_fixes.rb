@@ -19,7 +19,7 @@ class AccessionFixer
     @log.info "Initialized AccessionFixer with options:"
     @log.info "  backend_url: #{@backend_url}"
     @log.info "  username:    #{@username}"
-    @log.info "  password:    #{@password}"
+    @log.info "  password:    ---"
     @log.info "  commit:      #{@commit}"
   end
 
