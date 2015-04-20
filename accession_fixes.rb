@@ -330,7 +330,7 @@ options = {}
 OptionParser.new do |opts|
   opts.banner = "Usage: accession_fixes.rb [options]"
 
-  opts.on('-b', '--backendurl URL', 'Backend URL') { |v| options[:backend_url] = v }
+  opts.on('-a', '--backendurl URL', 'ArchivesSpace backend URL') { |v| options[:backend_url] = v }
   opts.on('-u', '--username USERNAME', 'Username for backend session') { |v| options[:username] = v }
   opts.on('-p', '--password PASSWORD', 'Password for backend session') { |v| options[:password] = v }
 
