@@ -26,7 +26,7 @@ class AccessionFixer
 
   def fix_brbl(code)
     @fund_codes = get_enumeration('payment_fund_code')
-    @log.info "Found fund codes: #{@fund_codes.inspect}"
+    @log.debug "found fund codes: #{@fund_codes.inspect}"
 
     fix(:brbl, code)
   end
@@ -57,7 +57,7 @@ class AccessionFixer
       results = JSON.parse(response.body)
 
       results['results'].each do |acc|
-        @log.info "Accession #{acc['display_string']}"
+        @log.info { "Accession #{acc['uri']} #{acc['display_string']}" }
 
         changed, deletes = apply_mssa(acc) if repo == :mssa
         changed, deletes = apply_brbl(acc) if repo == :brbl
@@ -77,18 +77,17 @@ class AccessionFixer
               # only do deletes if we successfully saved - don't want to lose data
               unless deletes.empty?
                 deletes.each do |ref|
-                  @log.debug "deleting #{ref}"
                   response = delete_request(ref)
                   if response.code == '200'
                     @log.info { "Deleted #{ref}" }
                   else
-                    @log.error { "Failed to delete #{ref} for #{acc['uri']}: #{response.body}" }
+                    @log.error { "Failed to delete #{ref} for #{acc['uri']}: #{response.code} #{response.body}" }
                   end
                 end
               end
 
             else
-              @log.error { "Couldn't save #{acc['uri']}: #{response.body}" }
+              @log.error { "Failed to save #{acc['uri']}: #{response.code} #{response.body}" }
             end
           else
             @log.debug "skipping save (commit is false)"
@@ -310,6 +309,7 @@ class AccessionFixer
 
 
   def delete_request(uri)
+    @log.debug { "deleting #{uri}" }
     http = Net::HTTP.new(@backend_url.host, @backend_url.port)
     request = Net::HTTP::Delete.new(uri)
     request['X-ArchivesSpace-Session'] = @session
