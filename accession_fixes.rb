@@ -4,29 +4,29 @@ require 'uri'
 require 'pp'
 require 'yaml'
 require 'optparse'
+require 'logger'
 
 class AccessionFixer
 
-  def initialize(opts)
+  def initialize(opts, log)
     @backend_url = URI.parse(opts[:backend_url])
     @username = opts[:username]
     @password = opts[:password]
     @commit = opts[:commit] || false
     @session = nil
+    @log = log
 
-    log
-    log "Initialized AccessionFixer with options:"
-    log "  backend_url: #{@backend_url}"
-    log "  username:    #{@username}"
-    log "  password:    #{@password}"
-    log "  commit:      #{@commit}"
-    log
+    @log.info "Initialized AccessionFixer with options:"
+    @log.info "  backend_url: #{@backend_url}"
+    @log.info "  username:    #{@username}"
+    @log.info "  password:    #{@password}"
+    @log.info "  commit:      #{@commit}"
   end
 
 
   def fix_brbl(code)
     @fund_codes = get_enumeration('payment_fund_code')
-    log "Found fund codes: #{@fund_codes.inspect}"
+    @log.info "Found fund codes: #{@fund_codes.inspect}"
 
     fix(:brbl, code)
   end
@@ -40,7 +40,7 @@ class AccessionFixer
   private
 
   def fix(repo, code)
-    log "Running #{repo} fixes for #{code}"
+    @log.info "Running #{repo} fixes for #{code}"
     ensure_session
 
     repo_uri = repo_for_code(code)
@@ -48,7 +48,7 @@ class AccessionFixer
     page = 1
 
     while true
-      log "page #{page}"
+      @log.info "page #{page}"
 
       response = get_request("#{repo_uri}/accessions", {'page' => page})
 
@@ -57,7 +57,7 @@ class AccessionFixer
       results = JSON.parse(response.body)
 
       results['results'].each do |acc|
-        log "  Accession #{acc['display_string']}"
+        @log.info "  Accession #{acc['display_string']}"
 
         changed, deletes = apply_mssa(acc) if repo == :mssa
         changed, deletes = apply_brbl(acc) if repo == :brbl
@@ -65,32 +65,32 @@ class AccessionFixer
         # save
         if changed
           if @commit
-            log "    saving ..."
+            @log.info "    saving ..."
             http = Net::HTTP.new(@backend_url.host, @backend_url.port)
             request = Net::HTTP::Post.new(acc['uri'])
             request['X-ArchivesSpace-Session'] = @session
             request.body = acc.to_json
             response = http.request(request)
             raise "Error: #{response.body}" unless response.code == '200'
-            log "           ... success"
+            @log.info "           ... success"
           else
-            log "    skipping save (commit is false)"
+            @log.info "    skipping save (commit is false)"
           end
         end
 
         unless deletes.empty?
           if @commit
             deletes.each do |ref|
-              log "    deleting #{ref}"
+              @log.info "    deleting #{ref}"
               response = delete_request(ref)
               if response.code == '200'
-                log "      ... success"
+                @log.info "      ... success"
               else
-                log "ERROR: Failed to delete #{ref} - #{response.body}"
+                @log.error "ERROR: Failed to delete #{ref} - #{response.body}"
               end
             end
           else
-            log "    skipping deletes (commit is false)"
+            @log.info "    skipping deletes (commit is false)"
           end
         end
       end
@@ -113,29 +113,29 @@ class AccessionFixer
 
       # boolean_2 > electronic_documents
       if user_def['boolean_2']
-        log "    found boolean_2"
+        @log.info "    found boolean_2"
         unless acc['material_types']
-          log "      creating material_types record" 
+          @log.info "      creating material_types record" 
           acc['material_types'] = {}
         end
-        log "      setting 'electronic_documents' to true"
+        @log.info "      setting 'electronic_documents' to true"
         acc['material_types']['electronic_documents'] = true
-        log "      setting boolean_2 to false"
+        @log.info "      setting boolean_2 to false"
         user_def['boolean_2'] = false
         changed = true
       end
 
       # real_1 > extent
       if user_def['real_1']
-        log "    found real_1"
-        log "      adding extent record"
+        @log.info "    found real_1"
+        @log.info "      adding extent record"
         extent = {
           'portion' => 'part',
           'number' => user_def['real_1'],
           'extent_type' => 'megabytes'
         }
         acc['extents'] << extent
-        log "      removing real_1"
+        @log.info "      removing real_1"
         user_def.delete('real_1')
         changed = true
       end
@@ -221,15 +221,15 @@ class AccessionFixer
     if acc.has_key?('user_defined')
       user_def = acc['user_defined']
       if user_def['integer_1']
-        log "    found integer_1"
-        log "      adding extent record"
+        @log.info "    found integer_1"
+        @log.info "      adding extent record"
         extent = {
           'portion' => 'part',
           'number' => user_def['integer_1'],
           'extent_type' => 'manuscript_items'
         }
         acc['extents'] << extent
-        log "      removing integer_1"
+        @log.info "      removing integer_1"
         user_def.delete('integer_1')
         changed = true
       end
@@ -240,15 +240,15 @@ class AccessionFixer
     if acc.has_key?('user_defined')
       user_def = acc['user_defined']
       if user_def['integer_2']
-        log "    found integer_2"
-        log "      adding extent record"
+        @log.info "    found integer_2"
+        @log.info "      adding extent record"
         extent = {
           'portion' => 'part',
           'number' => user_def['integer_2'],
           'extent_type' => 'non_book_format_items'
         }
         acc['extents'] << extent
-        log "      removing integer_2"
+        @log.info "      removing integer_2"
         user_def.delete('integer_2')
         changed = true
       end
@@ -259,21 +259,16 @@ class AccessionFixer
     if acc.has_key?('user_defined')
       user_def = acc['user_defined']
       if user_def['string_2']
-        log "    found string_2"
-        log "      copying to text_1"
+        @log.info "    found string_2"
+        @log.info "      copying to text_1"
         user_def['text_1'] = user_def['string_2']
-        log "      removing string_2"
+        @log.info "      removing string_2"
         user_def.delete('string_2')
         changed = true
       end
     end
 
     [changed, deletes]
-  end
-
-
-  def log(msg = "")
-    puts msg
   end
 
 
@@ -290,11 +285,11 @@ class AccessionFixer
 
 
   def repo_for_code(repo_code)
-    log "  finding repository for #{repo_code}"
+    @log.info "  finding repository for #{repo_code}"
     response = get_request("/search/repositories", {'page' => 1,'q' => "title='#{repo_code}'"})
     raise "Error: #{response.body}" unless response.code == '200'
     results = JSON.parse(response.body)
-    log "    ... got #{results['results'].first['id']}"
+    @log.info "    ... got #{results['results'].first['id']}"
     results['results'].first['id']
   end
 
@@ -325,6 +320,10 @@ class AccessionFixer
 end
 
 
+###
+
+log = Logger.new(STDOUT)
+log.level = Logger::INFO
 
 options = {}
 OptionParser.new do |opts|
@@ -341,6 +340,8 @@ OptionParser.new do |opts|
   opts.on('-b', '--brbl', 'Run BRBL fixes') { |v| options[:fix_brbl] = v }
 
   opts.on('-c', '--commit', 'Commit changes to the database') { |v| options[:commit] = v }
+
+  opts.on('-q', '--quiet', 'Only log warnings and errors') { log.level = Logger::WARN  }
 
   opts.on("-h", "--help", "Prints this help") { puts opts; exit }
 end.parse!
@@ -374,7 +375,7 @@ if options[:fix_brbl] && !options[:brbl_code]
 end
 
 if options[:fix_mssa] || options[:fix_brbl]
-  fixer = AccessionFixer.new(options)
+  fixer = AccessionFixer.new(options, log)
   fixer.fix_mssa(options[:mssa_code]) if options[:fix_mssa]
   fixer.fix_brbl(options[:brbl_code]) if options[:fix_brbl]
 else
