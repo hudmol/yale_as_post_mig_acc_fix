@@ -39,7 +39,8 @@ class AccessionFixer
   private
 
   def fix(repo, code)
-    @log.info "Running #{repo} fixes for #{code}"
+    @log.info { "Running #{repo} fixes for #{code}" }
+
     ensure_session
 
     @repo_uri = repo_for_code(code)
@@ -58,11 +59,15 @@ class AccessionFixer
       results['results'].each do |acc|
         @log.info { "Accession #{acc['uri']} #{acc['display_string']}" }
 
-        changed, deletes = apply_mssa(acc) if repo == :mssa
-        changed, deletes = apply_brbl(acc) if repo == :brbl
+        if repo == :mssa
+          apply_mssa(acc)
+        elsif repo == :brbl
+          apply_brbl(acc)
+        else
+          @log.warn "Strangely there is no repo"
+        end
 
-        # save
-        if changed
+        if @changed
           @log.debug { "record has changed: #{acc}" }
           if @commit
             http = Net::HTTP.new(@backend_url.host, @backend_url.port)
@@ -74,8 +79,8 @@ class AccessionFixer
               @log.info { "Saved #{acc['uri']}" }
 
               # only do deletes if we successfully saved - don't want to lose data
-              unless deletes.empty?
-                deletes.each do |ref|
+              unless @deletes.empty?
+                @deletes.each do |ref|
                   response = delete_request(ref)
                   if response.code == '200'
                     @log.info { "Deleted #{ref}" }
@@ -106,7 +111,7 @@ class AccessionFixer
 
 
   def apply_mssa(acc)
-    changed = false
+    reset_state
 
     @log.debug "applying rule: boolean_2 > electronic_documents"
     if acc.has_key?('user_defined')
@@ -117,8 +122,7 @@ class AccessionFixer
         end
         acc['material_types']['electronic_documents'] = true
         user_def['boolean_2'] = false
-        @log.debug "record changed"
-        changed = true
+        changed
       end
     end
 
@@ -133,18 +137,14 @@ class AccessionFixer
         }
         acc['extents'] << extent
         user_def.delete('real_1')
-        @log.debug "record changed"
-        changed = true
+        changed
       end
     end
-
-    [changed, []]
   end
 
 
   def apply_brbl(acc)
-    changed = false
-    deletes = []
+    reset_state
 
     @log.debug "applying rule: real_1 > payment"
     if acc.has_key?('user_defined')
@@ -169,8 +169,7 @@ class AccessionFixer
         user_def.delete('real_1')
         user_def.delete('string_3')
         user_def.delete('text_2')
-        @log.debug "record changed"
-        changed = true
+        changed
       end
     end
 
@@ -182,10 +181,8 @@ class AccessionFixer
       if results['event_type'] == 'agreement_sent'
         acc['user_defined'] ||= {}
         acc['user_defined']['boolean_1'] = true
-        @log.debug "record changed"
-        changed = true
-        @log.debug { "record #{event['ref']} marked for delete" }
-        deletes << event['ref']
+        changed
+        mark_for_delete(event['ref'])
         break
       end
     end
@@ -199,8 +196,7 @@ class AccessionFixer
         acc['content_description'] = acc['condition_description']
       end
       acc.delete('condition_description')
-      @log.debug "record changed"
-      changed = true
+      changed
     end
 
 
@@ -211,10 +207,8 @@ class AccessionFixer
       if results['event_type'] == 'rights_transferred'
         acc['user_defined'] ||= {}
         acc['user_defined']['boolean_2'] = true
-        @log.debug "record changed"
-        changed = true
-        @log.debug { "record #{event['ref']} marked for delete" }
-        deletes << event['ref']
+        changed
+        mark_for_delete(event['ref'])
         break
       end
     end
@@ -231,8 +225,7 @@ class AccessionFixer
         }
         acc['extents'] << extent
         user_def.delete('integer_1')
-        @log.debug "record changed"
-        changed = true
+        changed
       end
     end
 
@@ -248,8 +241,7 @@ class AccessionFixer
         }
         acc['extents'] << extent
         user_def.delete('integer_2')
-        @log.debug "record changed"
-        changed = true
+        changed
       end
     end
 
@@ -260,8 +252,7 @@ class AccessionFixer
       if user_def['string_2']
         user_def['text_1'] = user_def['string_2']
         user_def.delete('string_2')
-        @log.debug "record changed"
-        changed = true
+        changed
       end
     end
 
@@ -274,32 +265,24 @@ class AccessionFixer
     unless subjects.empty?
       acc['user_defined'] ||= {}
       acc['user_defined']['string_3'] = subjects.join('; ')
-      @log.debug "record changed"
-      changed = true
       @log.debug "unlinking subjects"
       acc['subjects'] = []
+      changed
     end
 
 
     @log.debug "enum_2 > mssu"
     acc['user_defined'] ||= {}
     acc['user_defined']['enum_2'] = 'mssu'
-    @log.debug "record changed"
-    changed = true
-    
-
-    [changed, deletes]
+    changed
   end
 
 
   def ensure_session
     return if @session
-
     response = Net::HTTP.post_form(URI.join(@backend_url, "/users/#{@username}/login"),
                                    'password' => @password)
-
     raise "Login failed" unless response.code == '200'
-
     @session = JSON.parse(response.body)['session']
   end
 
@@ -344,6 +327,24 @@ class AccessionFixer
     request = Net::HTTP::Delete.new(uri)
     request['X-ArchivesSpace-Session'] = @session
     http.request(request)
+  end
+
+
+  def reset_state
+    @changed = false
+    @deletes = []
+  end
+
+
+  def changed
+    @log.debug "record changed"
+    @changed = true
+  end
+
+
+  def mark_for_delete(ref)
+    @log.debug "record marked for deletion #{ref}"
+    @deletes << ref
   end
 
 end
