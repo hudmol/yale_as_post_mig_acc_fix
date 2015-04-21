@@ -1,8 +1,6 @@
 require 'net/http'
 require 'json'
 require 'uri'
-require 'pp'
-require 'yaml'
 require 'optparse'
 require 'logger'
 
@@ -14,6 +12,7 @@ class AccessionFixer
     @password = opts[:password]
     @commit = opts[:commit] || false
     @session = nil
+    @subject_title = {}
 
     @log = log
     @log.info { "Initialized AccessionFixer with options:" }
@@ -28,37 +27,7 @@ class AccessionFixer
     @fund_codes = get_enumeration('payment_fund_code')
     @log.debug { "found fund codes: #{@fund_codes.inspect}" }
 
-    @delete_if_unlinked = {}
-
     fix(:brbl, code)
-
-    # this is flawed because we can't count on the indexer to have caught up
-    @log.debug "checking for unlinked subjects to delete"
-    if @commit
-      @delete_if_unlinked.each_pair do |ref, title|
-        @log.debug { "checking #{ref} #{title}" }
-        response = get_request("#{@repo_uri}/search", { 'page' => 1, 'filter_term[]' => { "subjects" => title }.to_json })
-        if response.code == '200'
-          results = JSON.parse(response.body)
-          if results['total_hits'] == 0
-            @log.debug "subject is no longer linked to any records, so deleting"
-            del_resp = delete_request(ref)
-            if del_resp.code == '200'
-              @log.info { "Deleted #{ref}" }
-            else
-              @log.error { "Failed to delete subject #{ref}: #{del_resp.code} #{del_resp.body}" }
-            end
-          else
-            @log.debug { "subject still has #{results['total_hits']} records linking to it, so not deleting" }
-          end
-        else
-          @log.error { "Subject search failed: #{response.body}" }
-        end
-      end
-    else
-      @log.debug "skipping subject delete (commit is false)"
-    end
-
   end
 
 
@@ -96,7 +65,6 @@ class AccessionFixer
         if changed
           @log.debug { "record has changed: #{acc}" }
           if @commit
-            @log.debug "saving #{acc.inspect}"
             http = Net::HTTP.new(@backend_url.host, @backend_url.port)
             request = Net::HTTP::Post.new(acc['uri'])
             request['X-ArchivesSpace-Session'] = @session
@@ -301,10 +269,7 @@ class AccessionFixer
     @log.debug "applying rule: subject > string_3"
     subjects = []
     acc['subjects'].each do |subject|
-      response = get_request(subject['ref'])
-      subj = JSON.parse(response.body)
-      subjects << subj['title']
-      @delete_if_unlinked[subject['ref']] = subj['title']
+      subjects << get_subject_title(subject['ref'])
     end
     unless subjects.empty?
       acc['user_defined'] ||= {}
@@ -353,6 +318,14 @@ class AccessionFixer
     response = get_request('/config/enumerations')
     results = JSON.parse(response.body)
     results.select {|a| a['name'] == name }.first['values']
+  end
+
+
+  def get_subject_title(ref)
+    return @subject_title[ref] if @subject_title.has_key?(ref)
+    response = get_request(ref)
+    subj = JSON.parse(response.body)
+    @subject_title[ref] = subj['title']
   end
 
 
