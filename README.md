@@ -8,8 +8,6 @@ This repoository contains the following files:
 - **config.rb** - default configuration settings for both of the scripts.
 - **delete_unlinked_subjects.rb** - a ruby script for removing all unlinked subject records from an ArchivesSpace instance.
 
-See below for a full description of each of these files.
-
 
 ## System Requirements
 
