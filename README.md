@@ -58,7 +58,7 @@ As different rules apply to Accession records from the two repositories, provisi
 
 Subjects are global records in ArchivesSpace, so no repository is specified when running `delete_unlinked_subjects.rb`. This script searches against each Subject record in the system for any records that unlink to it. If it fails to find any linking records the Subject record is deleted.
 
-The two scripts take a number of switches that affect their behavior. Many of the switches are the same for both scripts. Default values for the switches can be set in the `config.rb` file. The find out the swtiches supported by each script, give it a -h or --help swtich as follows:
+The two scripts take a number of switches that affect their behavior. Many of the switches are the same for both scripts. Default values for the switches can be set in the `config.rb` file. The find out the switches supported by each script, give it a -h or --help switch as follows:
 
     $ ruby accession_fixes.rb --help
     Usage: accession_fixes.rb [options]
