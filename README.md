@@ -83,3 +83,5 @@ The two scripts take a number of switches that affect their behavior. Many of th
         -d, --debug                      Log debugging output
         -h, --help                       Prints this help
 
+
+As agreed deleting subjects has been split into a separate script. This is because there is no reliable way of ensuring the indexer has caught up with the changes made by applying the Accession updates before the Subject checks are applied. The Subject script finds out which Subject records to delete by searching against the index for Subjects that don't have any records linking to them - searching is the most efficient way of finding this out. The good news is that the provided `delete_unlinked_subjects.rb` script is a general purpose Subject cleaner-uperer that can be run independently of the `accession_fixes.rb` script at any time to get a report on orphaned Subjects and optionally delete them.
