@@ -45,18 +45,14 @@ class AccessionFixer
 
     @repo_uri = repo_for_code(code)
 
-    page = 1
+    response = get_request("#{@repo_uri}/accessions", {'all_ids' => 'true'})
+    raise "Error: #{response.body}" unless response.code == '200'
+    all_ids = JSON.parse(response.body)
 
-    while true
-      @log.debug "page #{page}"
+    all_ids.each_slice(50) do |page_ids|
+      response = get_request("#{@repo_uri}/accessions", {'id_set' => page_ids.join(",")})
 
-      response = get_request("#{@repo_uri}/accessions", {'page' => page})
-
-      raise "Error: #{response.body}" unless response.code == '200'
-
-      results = JSON.parse(response.body)
-
-      results['results'].each do |acc|
+      JSON.parse(response.body).each do |acc|
         @log.info { "Accession #{acc['uri']} #{acc['display_string']}" }
 
         if repo == :mssa
@@ -97,16 +93,8 @@ class AccessionFixer
             @log.debug "skipping save (commit is false)"
           end
         end
-
-      end
-
-      if results['this_page'] < results['last_page']
-        page += 1
-      else
-        break
       end
     end
-
   end
 
 
