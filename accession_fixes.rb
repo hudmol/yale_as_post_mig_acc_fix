@@ -144,12 +144,14 @@ class AccessionFixer
           'currency' => user_def['string_3'],
           'payments' => []
         }
-        user_def['text_2'].split('|').each do |fund_code|
-          fund_code.strip!
-          if @fund_codes.include?(fund_code)
-            payment_summary['payments'] << {'fund_code' => fund_code}
-          else
-            payment_summary['payments'] << {'note' => fund_code}
+        if user_def.has_key?('text_2')
+          user_def['text_2'].split('|').each do |fund_code|
+            fund_code.strip!
+            if @fund_codes.include?(fund_code)
+              payment_summary['payments'] << {'fund_code' => fund_code}
+            else
+              payment_summary['payments'] << {'note' => fund_code}
+            end
           end
         end
         acc['payment_summary'] = payment_summary
