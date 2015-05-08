@@ -69,6 +69,7 @@ class AccessionFixer
             http = Net::HTTP.new(@backend_url.host, @backend_url.port)
             request = Net::HTTP::Post.new(acc['uri'])
             request['X-ArchivesSpace-Session'] = @session
+            request['Content-Type'] = 'application/json'
             request.body = acc.to_json
             response = http.request(request)
             if response.code == '200'
