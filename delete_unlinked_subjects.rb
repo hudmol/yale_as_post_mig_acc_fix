@@ -28,7 +28,7 @@ class UnlinkedSubjectDeleter
     page = 1
 
     while true
-      @log.debug "page #{page}"
+      @log.info "page #{page}"
 
       response = get_request("/subjects", {'page' => page})
 
@@ -41,8 +41,7 @@ class UnlinkedSubjectDeleter
         @log.debug { subj }
         response = get_request("/search", { 'page' => 1, 'filter_term[]' => { "subjects" => subj['title'] }.to_json })
         if response.code == '200'
-          results = JSON.parse(response.body)
-          if results['total_hits'] == 0
+          if JSON.parse(response.body)['total_hits'] == 0
             if @commit
               @log.info "Subject is no longer linked to any records, so deleting"
               del_resp = delete_request(subj['uri'])
@@ -61,6 +60,7 @@ class UnlinkedSubjectDeleter
           @log.error { "Subject search failed: #{response.body}" }
         end
       end
+
       if results['this_page'] < results['last_page']
         page += 1
       else
