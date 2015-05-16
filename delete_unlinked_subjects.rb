@@ -25,23 +25,20 @@ class UnlinkedSubjectDeleter
   def run
     ensure_session
 
-    page = 1
+    response = get_request("/subjects", {'all_ids' => 'true'})
+    raise "Error: #{response.body}" unless response.code == '200'
+    all_ids = JSON.parse(response.body)
 
-    while true
-      @log.info "page #{page}"
+    all_ids.each_slice(50) do |page_ids|
+      response = get_request("/subjects", {'id_set' => page_ids.join(",")})
 
-      response = get_request("/subjects", {'page' => page})
-
-      raise "Error: #{response.body}" unless response.code == '200'
-
-      results = JSON.parse(response.body)
-
-      results['results'].each do |subj|
+      JSON.parse(response.body).each do |subj|
         @log.info { "Subject #{subj['uri']} #{subj['title']}" }
         @log.debug { subj }
-        response = get_request("/search", { 'page' => 1, 'filter_term[]' => { "subjects" => subj['title'] }.to_json })
-        if response.code == '200'
-          if JSON.parse(response.body)['total_hits'] == 0
+        lr_resp = get_request("/search", { 'page' => 1, 'filter_term[]' => { "subjects" => subj['title'] }.to_json })
+        if lr_resp.code == '200'
+          linked_records = JSON.parse(lr_resp.body)
+          if linked_records['total_hits'] == 0
             if @commit
               @log.info "Subject is no longer linked to any records, so deleting"
               del_resp = delete_request(subj['uri'])
@@ -54,17 +51,11 @@ class UnlinkedSubjectDeleter
               @log.info "Subject is no longer linked to any records, skipping delete (commit is false)"
             end
           else
-            @log.info { "Subject still has #{results['total_hits']} records linking to it, so not deleting" }
+            @log.info { "Subject still has #{linked_records['total_hits']} records linking to it, so not deleting" }
           end
         else
           @log.error { "Subject search failed: #{response.body}" }
         end
-      end
-
-      if results['this_page'] < results['last_page']
-        page += 1
-      else
-        break
       end
     end
   end
